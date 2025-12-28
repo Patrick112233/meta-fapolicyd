@@ -6,19 +6,18 @@ LICENSE = "GPL-3.0-only"
 LIC_FILES_CHKSUM = "file://COPYING;md5=d32239bcb673463ab874e80d47fae504"
 
 SRC_URI = "git://github.com/linux-application-whitelisting/fapolicyd;protocol=https;branch=main"
+SRC_URI += "file://dyn-linker-cross.patch"
+
 
 # Modify these as desired
 PV = "1.4.3+git"
 SRCREV = "d2d89b81d55d5815c4a612782e5247270a0ce067"
 
 DEPENDS = " \
-    gcc \
     autoconf \
     automake \
     libtool \
-    libudev \
-    kernel-headers \
-    systemd \
+    eudev \
     openssl \
     file \
     libcap-ng \
@@ -26,9 +25,19 @@ DEPENDS = " \
     lmdb \
     uthash \
     python3 \
+    rpm \
 "
-#    libgcrypt     rpm 
-# TODO: check weather kernel >= 4.20 FANOTIFY_OPEN_EXEC_PERM must be available!
+
+# RDEPENDS = " /
+#     systemd \
+# "
+
+# Likly not needed:ABIEXTENSIO
+# gcc linux-libc-headers
+# eudev -> keep on failure!
+
+# Removed:
+# libgcrypt
 
 inherit autotools pkgconfig systemd python3-dir useradd
 
@@ -42,7 +51,12 @@ USERADD_PACKAGES = "${PN}"
 GROUPADD_PARAM:${PN} = "-r fapolicyd"
 USERADD_PARAM:${PN} = "-r -M -d ${localstatedir}/lib/fapolicyd -s ${base_sbindir}/nologin -g fapolicyd -c 'Application Whitelisting Daemon' fapolicyd"
 
+
 do_configure:prepend() {
+    if [ $KERNEL_VERSION -lt "4.20" ]; then
+        bbfatal "fapolicyd requires kernel version 4.20 or higher for FANOTIFY_OPEN_EXEC_PERM support."
+    fi
+    cd ${S}
     ./autogen.sh
 }
 
@@ -76,7 +90,7 @@ do_install() {
     install -m 0644 ${S}/init/fapolicyd.trust ${D}${sysconfdir}/fapolicyd/trust.d/
 }
 
-FILES_${PN} = " \
+FILES:${PN} = " \
     ${bindir}/* \
     ${sbindir}/* \
     ${sysconfdir}/* \
@@ -86,5 +100,6 @@ FILES_${PN} = " \
     ${systemd_unitdir}/system/* \
 "
 
-FILES_${PN}-dev += "${libdir}/*.a ${libdir}/*.la"
-SYSTEMD_SERVICE_${PN} = "fapolicyd.service"
+
+FILES:${PN}-dev += "${libdir}/*.a ${libdir}/*.la"
+SYSTEMD_SERVICE:${PN} = "fapolicyd.service"
