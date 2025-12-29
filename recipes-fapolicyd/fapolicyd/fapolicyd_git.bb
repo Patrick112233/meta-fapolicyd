@@ -5,8 +5,9 @@ HOMEPAGE = "https://github.com/linux-application-whitelisting/fapolicyd"
 LICENSE = "GPL-3.0-only"
 LIC_FILES_CHKSUM = "file://COPYING;md5=d32239bcb673463ab874e80d47fae504"
 
-SRC_URI = "git://github.com/linux-application-whitelisting/fapolicyd;protocol=https;branch=main"
-SRC_URI += "file://dyn-linker-cross.patch"
+SRC_URI = "git://github.com/linux-application-whitelisting/fapolicyd;protocol=https;branch=main \
+           file://0001-fix-dyn-linker-macro-for-cross-compile.patch \
+           "
 
 
 # Modify these as desired
@@ -42,9 +43,17 @@ DEPENDS = " \
 inherit autotools pkgconfig systemd python3-dir useradd
 
 S = "${WORKDIR}/git"
+B = "${S}"
 
+# Common paths: /lib/ld-linux-aarch64.so.1, /lib64/ld-linux-x86-64.so.2, /lib/ld-linux.so.3
 # Specify any options you want to pass to the configure script using EXTRA_OECONF:
-EXTRA_OECONF = "--with-audit --disable-shared"
+EXTRA_OECONF = "--with-audit --disable-shared --with-system-ld-so=/lib64/ld-linux-x86-64.so.2"
+CACHED_CONFIGUREVARS += "ac_cv_path_SYSTEM_LD_SO=/lib64/ld-linux-x86-64.so.2"
+
+# OR use EXTRA_OECONF if the macro allows variable overrides
+# Skip the dynamic linker detection during cross-compile
+#CFLAGS:append = " -DSYSTEM_LD_SO='\"/lib/ld-linux-x86-64.so.2\"'"
+# EXTRA_OECONF += "SYSTEM_LD_SO=/lib/ld-linux-aarch64.so.1"
 
 
 USERADD_PACKAGES = "${PN}"
@@ -78,6 +87,7 @@ do_install() {
     install -m 0755 -d ${D}${datadir}/fapolicyd
     install -m 0644 -d ${D}${libdir}/tmpfiles.d/
     install -m 0755 -d ${D}${runstatedir}/fapolicyd
+    install -m 0755 -d ${D}${systemd_unitdir}/system/
     
     # Init:
     install -d ${D}${datadir}/bash-completion/completions
@@ -88,6 +98,9 @@ do_install() {
     install -m 0644 ${S}/init/fapolicyd.service ${D}${systemd_unitdir}/system/
     install -m 0644 ${S}/init/fapolicyd-tmpfiles.conf ${D}${libdir}/tmpfiles.d/fapolicyd.conf
     install -m 0644 ${S}/init/fapolicyd.trust ${D}${sysconfdir}/fapolicyd/trust.d/
+
+    # Clean up any stray top-level directory created by upstream install
+    rmdir --ignore-fail-on-non-empty ${D}/fapolicyd || true
 }
 
 FILES:${PN} = " \
