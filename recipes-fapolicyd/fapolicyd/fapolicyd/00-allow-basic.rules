@@ -1,0 +1,37 @@
+# /etc/fapolicyd/rules.d/00-allow-basic.rules
+# Minimal whitelist for base system execution
+
+############################
+# Allow system executables #
+############################
+allow perm=execute all : ftype=application/x-executable path=/usr/bin/
+allow perm=execute all : ftype=application/x-executable path=/usr/sbin/
+allow perm=execute all : ftype=application/x-executable path=/bin/
+allow perm=execute all : ftype=application/x-executable path=/sbin/
+
+#####################
+# Allow ELF loader  #
+#####################
+allow perm=execute all : ftype=application/x-executable path=/lib64/ld-linux-x86-64.so.2
+allow perm=execute all : ftype=application/x-executable path=/lib/ld-linux.so.2
+
+###################
+# Allow libraries #
+###################
+allow perm=open all : ftype=application/x-sharedlib path=/lib/
+allow perm=open all : ftype=application/x-sharedlib path=/lib64/
+allow perm=open all : ftype=application/x-sharedlib path=/usr/lib/
+allow perm=open all : ftype=application/x-sharedlib path=/usr/lib64/
+
+########################
+# Allow interpreters   #
+########################
+allow perm=execute all : path=/usr/bin/python
+allow perm=execute all : path=/usr/bin/python3
+allow perm=execute all : path=/bin/bash
+allow perm=execute all : path=/bin/sh
+
+#######################
+# Deny everything else #
+#######################
+deny perm=execute all : all

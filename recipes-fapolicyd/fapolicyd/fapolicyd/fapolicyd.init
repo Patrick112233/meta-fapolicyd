@@ -37,18 +37,23 @@ test -x $FAGENRULES || exit 5
 start() {
     echo "Starting $DESC: $NAME"
     
-    # Ensure runtime directory exists
-    mkdir -p /run/fapolicyd
-    
-    # Generate rules before starting
+    mkdir -p /run
+    chmod 0755 /run
+
+    # Ensure trust database directory exists
+    mkdir -p /var/lib/fapolicyd
+    chown root:root /var/lib/fapolicyd
+    chmod 0755 /var/lib/fapolicyd
+
+    # Generate rules before starting (must run as root)
     $FAGENRULES || exit 1
-    
-    # Start daemon using start-stop-daemon
+
+    # Start daemon using start-stop-daemon (run as root - needs CAP_SYS_ADMIN for fanotify)
     start-stop-daemon --start --quiet \
-        --pidfile $PIDFILE \
-        --exec $DAEMON \
-        --chuid $DAEMON_USER:$DAEMON_GROUP \
-        -- $DAEMON_ARGS
+        --background \
+        --make-pidfile \
+        --pidfile "$PIDFILE" \
+        --exec "$DAEMON" -- $DAEMON_ARGS
     RETVAL=$?
     return $RETVAL
 }
@@ -58,8 +63,9 @@ stop() {
     
     # Stop daemon using start-stop-daemon
     start-stop-daemon --stop --quiet \
-        --pidfile $PIDFILE \
-        --exec $DAEMON
+    --background \
+    --pidfile "$PIDFILE" \
+    --exec "$DAEMON"
     RETVAL=$?
     rm -f $PIDFILE
     return $RETVAL
