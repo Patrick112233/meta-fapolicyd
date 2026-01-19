@@ -40,9 +40,10 @@ start() {
     mkdir -p /run
     chmod 0755 /run
 
-    # Ensure trust database directory exists
+    # Ensure trust database directory exists with proper permissions
     mkdir -p /var/lib/fapolicyd
-    chown root:root /var/lib/fapolicyd
+    chown -R root:root /var/lib/fapolicyd
+    chmod -R u+rwX /var/lib/fapolicyd
     chmod 0755 /var/lib/fapolicyd
 
     # Generate rules before starting (must run as root)

@@ -22,6 +22,7 @@ DEPENDS = " \
     libtool \
     eudev \
     openssl \
+    file-native \
     file \
     libcap-ng \
     libseccomp \
@@ -30,6 +31,10 @@ DEPENDS = " \
     python3 \
     rpm \
 "
+# Delete:
+do_install[depends] += "file-native:do_populate_sysroot"
+
+
 
 # Runtime dependencies - conditionally add systemd
 RDEPENDS:${PN}:append = "${@'systemd' if d.getVar('FAPOLICYD_INIT_SYSTEM') == 'systemd' else ''}"
@@ -60,19 +65,30 @@ INITSCRIPT_PARAMS = "start 99 2 3 4 5 . stop 99 0 1 6 ."
 # Systemd service (used if INIT_MANAGER is systemd)
 SYSTEMD_SERVICE:${PN} = "fapolicyd.service"
 
-python () {
-    if "package_rpm" not in d.getVar("PACKAGE_CLASSES"):
-        bb.warn("""
-            fapolicyd: RPM backend enabled but PACKAGE_CLASSES is not 'package_rpm'.
-            Trust database will be empty on target, and fail fapolicyd.
-        """)
-}
-
 
 do_configure:prepend() {
+
+    if ! echo "${PACKAGE_CLASSES}" | grep -qw "package_rpm"; then
+        bbfatal "fapolicyd requires RPM backend (PACKAGE_CLASSES must be in 'package_rpm')"
+    fi
+
     if [ $KERNEL_VERSION -lt "4.20" ]; then
         bbfatal "fapolicyd requires kernel version 4.20 or higher for FANOTIFY_OPEN_EXEC_PERM support."
     fi
+
+    KERNEL_CONFIG="${STAGING_KERNEL_BUILDDIR}/.config"
+    if [ ! -f "${KERNEL_CONFIG}" ]; then
+        bbwarn "Kernel config not found; skipping FANOTIFY check."
+    else
+        if ! grep -q '^CONFIG_FANOTIFY=y' "${KERNEL_CONFIG}"; then
+            bbfatal "Kernel missing CONFIG_FANOTIFY"
+        fi
+
+        if ! grep -q '^CONFIG_FANOTIFY_ACCESS_PERMISSIONS=y' "${KERNEL_CONFIG}"; then
+            bbfatal "Kernel missing CONFIG_FANOTIFY_ACCESS_PERMISSIONS"
+        fi
+    fi
+
     cd ${S}
     ./autogen.sh
 }
@@ -80,9 +96,6 @@ do_configure:prepend() {
 
 do_install() {
     oe_runmake DESTDIR=${D} install
-    
-    # Remove corrupted magic file installed by upstream
-    rm -f ${D}${datadir}/fapolicyd/fapolicyd-magic.mgc
 
     # Substitute target-friendly interpreter paths in rules if placeholders exist
     if ls ${S}/rules.d/*.rules >/dev/null 2>&1; then
@@ -102,21 +115,33 @@ do_install() {
     # Install common init files
     install -d ${D}${datadir}/bash-completion/completions
     install -m 0644 ${S}/init/fapolicyd.bash_completion ${D}${datadir}/bash-completion/completions/fapolicyd
-    
-    # Install custom config that disables trust database
     install -m 0644 ${WORKDIR}/fapolicyd.conf ${D}${sysconfdir}/fapolicyd/
-    
-    # fapolicyd can work without it, using libmagic directly
-    install -m 0644 ${S}/init/fapolicyd-magic ${D}${datadir}/fapolicyd/
     install -m 0644 ${S}/init/fapolicyd-tmpfiles.conf ${D}${libdir}/tmpfiles.d/fapolicyd.conf
     install -m 0644 ${S}/init/fapolicyd.trust ${D}${sysconfdir}/fapolicyd/trust.d/
 
-    # chmod 0644 ${D}${datadir}/fapolicyd/fapolicyd-magic.mgc
+    # Compile and install magic file
 
+    ## Works but wrong compiler version!
+    #rm -f ${S}/init/fapolicyd-magic.mgc
+    #cd ${S}/init
+    #file -C -m ${S}/init/fapolicyd-magic
+    #if [ ! -f ${S}/init/fapolicyd-magic.mgc ]; then
+    #    bbfatal "Failed to compile magic file"
+    #fi
+    #cd ${S}
+    
+    install -m 0644 ${S}/init/fapolicyd-magic ${D}${datadir}/fapolicyd/
+
+    # Does not work!
+    #ls -la ${D}${bindir}
+    #${D}${bindir}/file -C -m ${D}${datadir}/fapolicyd/fapolicyd-magic
+
+    # Does not work eather
+    # install -m 0644 ${S}/init/fapolicyd-magic.mgc ${D}${datadir}/fapolicyd/
+    
     # Install default rules files from upstream
     install -m 0644 ${WORKDIR}/00-allow-basic.rules ${D}${sysconfdir}/fapolicyd/rules.d/
 
-    
     # Install init system files based on FAPOLICYD_INIT_SYSTEM
     case "${FAPOLICYD_INIT_SYSTEM}" in
         systemd)
